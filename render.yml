@@ -1,6 +1,6 @@
 services:
   - type: worker
-    name: anonxmusic
+    name: opusmusic-
     runtime: docker
     dockerfilePath: ./Dockerfile
     dockerContext: .
