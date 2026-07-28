@@ -1,57 +1,34 @@
 services:
   - type: worker
-    name: opusmusic-
-    runtime: docker
-    dockerfilePath: ./Dockerfile
-    dockerContext: .
-    plan: starter
-    region: singapore
+    name: opusmusic
+    runtime: python
+    repo: https://github.com/TeamAlfaBots/OpusMusic
     branch: master
+    buildCommand: |
+      pip install uv
+      uv sync --frozen
+    startCommand: uv run python3 -m opus
     envVars:
       - key: API_ID
         sync: false
+
       - key: API_HASH
         sync: false
+
       - key: BOT_TOKEN
         sync: false
-      - key: MONGO_URL
-        sync: false
-      - key: LOGGER_ID
-        sync: false
+
       - key: OWNER_ID
         sync: false
+
+      - key: LOGGER_ID
+        sync: false
+
+      - key: MONGO_URL
+        sync: false
+
       - key: SESSION
         sync: false
-      - key: SESSION2
-        sync: false
-      - key: SESSION3
-        sync: false
-      - key: DURATION_LIMIT
-        value: "60"
-      - key: QUEUE_LIMIT
-        value: "20"
-      - key: PLAYLIST_LIMIT
-        value: "20"
-      - key: SUPPORT_CHANNEL
-        value: https://t.me/Alfabots_update
-      - key: SUPPORT_CHAT
-        value: https://t.me/Alfabots_support
-      - key: AUTO_LEAVE
-        value: "False"
-      - key: AUTO_END
-        value: "False"
-      - key: THUMB_GEN
-        value: "True"
-      - key: VIDEO_PLAY
-        value: "True"
-      - key: LANG_CODE
-        value: en
-      - key: COOKIES_URL
-        sync: false
-      - key: DEFAULT_THUMB
-        value: https://te.legra.ph/file/3e40a408286d4eda24191.jpg
-      - key: PING_IMG
-        value: https://files.catbox.moe/ynwsxi.png
-      - key: START_IMG
-        value: https://files.catbox.moe/m4jeoo.jpg
-        
+
+      - key: PYTHON_VERSION
+        value: "3.12.0"
