@@ -6,11 +6,34 @@
 import asyncio
 import signal
 import importlib
+import os
+import sys
+import threading
 from contextlib import suppress
+from http.server import HTTPServer, BaseHTTPRequestHandler
 
 from opus import (anon, app, config, db, logger,
                    stop, thumb, userbot, yt)
 from opus.plugins import all_modules
+
+
+# HTTP Server for Render health checks
+class HealthCheckHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.send_header('Content-type', 'text/plain')
+        self.end_headers()
+        self.wfile.write(b'Bot is running')
+
+    def log_message(self, format, *args):
+        pass  # Suppress logs
+
+
+def run_http_server():
+    port = int(os.environ.get("PORT", 8000))
+    server = HTTPServer(('0.0.0.0', port), HealthCheckHandler)
+    logger.info(f"HTTP health check server started on port {port}")
+    server.serve_forever()
 
 
 async def idle():
@@ -23,6 +46,11 @@ async def idle():
     await stop_event.wait()
 
 async def main():
+    # Start HTTP server in background thread (keeps Render alive)
+    http_thread = threading.Thread(target=run_http_server, daemon=True)
+    http_thread.start()
+    logger.info("HTTP server thread started for Render health checks")
+
     await db.connect()
     await app.boot()
     await userbot.boot()
@@ -50,3 +78,4 @@ if __name__ == "__main__":
         asyncio.get_event_loop().run_until_complete(main())
     except KeyboardInterrupt:
         pass
+      
