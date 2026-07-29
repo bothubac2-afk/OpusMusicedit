@@ -7,6 +7,7 @@ import random
 from datetime import datetime
 
 from pyrogram import enums, filters, types
+from pyrogram.errors import PeerIdInvalid, ChatWriteForbidden
 
 from opus import app, config, db, lang
 from opus.helpers import buttons, utils
@@ -74,14 +75,14 @@ def _group_caption(base_text: str) -> str:
         f"{base_text}\n\n"
         f"{_DIVIDER}\n"
         f"<b>◈ {app.name}</b>  <code>v{version}</code>\n"
-        f"✦ High-quality • Low-latency • Always on\n"
+        f"✦ ʜɪɢʜ-qᴜᴧʟɪᴛʏ • ʟσᴡ-ʟᴧᴛєηᴄʏ • ᴧʟᴡᴧʏꜱ ση\n"
         f"{_DIVIDER}"
     )
 
 
 async def _react(message: types.Message, emoji: str) -> None:
     try:
-        await message.react(emoji)
+        await message.react(emoji, big=True)
     except Exception:
         pass
 
@@ -144,14 +145,14 @@ async def start(_, message: types.Message):
     except Exception:
         pass
 
-    # 2. React to /start message
-    asyncio.create_task(_react(message, random.choice(_REACTIONS)))
+    # 2. React to /start message (await — nahi skip hoga)
+    await _react(message, random.choice(_REACTIONS))
 
     # 3. Loading animation (private only)
     if private:
         await _loading_animation(message)
 
-    # 4. Sticker animation (private only)
+    # 4. Sticker (private only)
     if private:
         asyncio.create_task(_send_sticker(message))
 
@@ -171,57 +172,22 @@ async def start(_, message: types.Message):
     # 6. Buttons
     key = buttons.start_key(message.lang, private)
 
-    if private:
-        # ── PRIVATE: Text first → then Photo + Buttons ────────────────────
-        try:
-            await message.reply_text(
-                text=_text,
-                quote=True,
-                parse_mode=enums.ParseMode.HTML,
-            )
-        except Exception:
-            pass
-
-        # Small delay so text appears before image
-        await asyncio.sleep(0.3)
-
-        # Photo + Buttons (no caption)
-        sent = None
-        try:
-            sent = await app.send_photo(
-                chat_id=message.chat.id,
-                photo=get_start_img(),
-                reply_markup=key,
-            )
-        except Exception:
-            # Fallback: just send buttons as text if photo fails
-            sent = await message.reply_text(
-                text="🎵",
-                reply_markup=key,
-                quote=False,
-            )
-
-    else:
-        # ── GROUP: Photo + Caption + Buttons (single message) ─────────────
-        sent = None
-        try:
-            sent = await message.reply_photo(
-                photo=get_start_img(),
-                caption=_text,
-                reply_markup=key,
-                quote=False,
-            )
-        except Exception:
-            sent = await message.reply_text(
-                text=_text,
-                reply_markup=key,
-                quote=False,
-                parse_mode=enums.ParseMode.HTML,
-            )
-
-    # 7. React to last sent message
-    if sent:
-        asyncio.create_task(_react(sent, "💎"))
+    # 7. Photo + caption + buttons (original position)
+    sent = None
+    try:
+        sent = await message.reply_photo(
+            photo=get_start_img(),
+            caption=_text,
+            reply_markup=key,
+            quote=not private,
+        )
+    except Exception:
+        sent = await message.reply_text(
+            text=_text,
+            reply_markup=key,
+            quote=not private,
+            parse_mode=enums.ParseMode.HTML,
+        )
 
     # 8. Save user / chat
     if private:
@@ -264,4 +230,3 @@ async def _new_member(_, message: types.Message):
                 return
             await utils.send_log(message, True)
             await db.add_chat(message.chat.id)
-          
