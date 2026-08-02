@@ -74,7 +74,7 @@
     "play_banned": "<u><b>{0} ᴧꜱꜱɪꜱᴛᴀɴᴛ ɪꜱ ʙᴀɴɴєᴅ ʏσᴜʀ ᴄʜᴀᴛ</b></u>\n\n<b>ɪᴅ:</b> <code>{1}</code>\n<b>ηᴀϻє:</b> {2}\n<b>ᴜꜱєʀɴᴀϻє:</b> {3}",
     "play_media": "<blockquote><b>⦿ ησᴡ ᴘʟᴀʏɪɴɢ</b></blockquote>\n<blockquote><b>⌬ ᴛɪᴛʟє:</b> <a href={0}>{1}</a>\n<b>⌬ ᴅᴜʀᴀᴛɪσɴ:</b> {2} ϻɪɴ\n<b>⌬ ʀєǫᴜєꜱᴛєᴅ ʙʏ:</b> {3}</blockquote>",
     "play_log": "<u>{0} ᴘʟᴀʏ ʟσɢ</u>\n\n<b>ᴄʜᴀᴛ:</b> <code>{1}</code> | {2}\n<b>ᴜꜱєʀ:</b> <code>{3}</code> | {4}\n<b>ϻєꜱꜱᴀɢє ʟɪɴᴋ:</b> {5}\n\n<b>ᴛɪᴛʟє:</b> {6}\n<b>ᴅᴜʀᴀᴛɪσɴ:</b> {7} ϻɪɴ",
-    "play_queued": "<blockquote><b>ᴧᴅᴅєᴅ ᴛσ ǫᴜєᴜє:</blockquote> {0}\n<b>⌬ ᴛɪᴛʟє:</b> <a href={1}>{2}</a>\n\n<b>⌬ ᴅᴜʀᴀᴛɪσɴ:</b> {3} ϻɪɴ\n<b>⌬ ʀєǫᴜєꜱᴛєᴅ ʙʏ:</b> {4}",
+    "play_queued": "<blockquote><b>ᴧᴅᴅєᴅ ᴛσ ǫᴜєᴜє:{0}</blockquote>\n<blockquote><b>⌬ ᴛɪᴛʟє:</b> <a href={1}>{2}</a>\n\n<b>⌬ ᴅᴜʀᴀᴛɪσɴ:</b> {3} ϻɪɴ\n<b>⌬ ʀєǫᴜєꜱᴛєᴅ ʙʏ:</b> {4}</blockquote>",
     "play_usage": "<b>ᴜꜱᴀɢє:</b>\n\n<code>/Play Attention</code>",
     "play_seeking": "ꜱєєᴋɪɴɢ ᴛʜє ᴄᴜʀʀєɴᴛ ꜱᴛʀєᴀϻ...",
     "play_again": "ʀєᴘʟʏɪɴɢ ᴛʜє ᴄᴜʀʀєɴᴛ ϻєᴅɪᴀ...",
