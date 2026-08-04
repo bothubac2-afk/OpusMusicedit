@@ -1,4 +1,4 @@
-import os
+                import os
 import re
 import time
 import yt_dlp
@@ -74,11 +74,30 @@ class YouTube:
         return f"{api['url']}::{api['key']}"
 
     def get_cookies(self):
+        """
+        Cookie files load karta hai, lekin sirf wahi jo valid Netscape
+        format mein hon. Corrupt/empty/wrong-format file ko yahin skip
+        kar dete hain taaki yt-dlp ke andar cookiejar load/save crash
+        na kare aur poora download() chain na toote.
+        """
         if not self.checked:
             if os.path.exists(self.cookie_dir):
                 for file in os.listdir(self.cookie_dir):
                     if file.endswith(".txt"):
-                        self.cookies.append(f"{self.cookie_dir}/{file}")
+                        path = f"{self.cookie_dir}/{file}"
+                        try:
+                            with open(path, "r", encoding="utf-8") as f:
+                                first_line = f.readline()
+                            if first_line.startswith("# Netscape") or first_line.startswith(
+                                "# HTTP Cookie"
+                            ):
+                                self.cookies.append(path)
+                            else:
+                                logger.warning(
+                                    f"Skipping invalid cookie file (bad header): {path}"
+                                )
+                        except Exception as e:
+                            logger.warning(f"Cookie read error {path}: {e}")
             self.checked = True
         return random.choice(self.cookies) if self.cookies else None
 
@@ -271,13 +290,21 @@ class YouTube:
             opts["format"] = "bestaudio"
 
         def run():
-            with yt_dlp.YoutubeDL(opts) as ydl:
-                try:
+            # FIX: 'with' block ab poora try ke andar hai. Pehle try sirf
+            # extract_info() ke around tha, isliye jab context manager
+            # __exit__ pe close()/save_cookies() chalta tha aur cookiefile
+            # corrupt/invalid format hone ki wajah se crash hota tha, wo
+            # exception yahan se bahar bubble ho jata tha aur poora
+            # download() (aur uske baad ka Saavn fallback) crash kar deta
+            # tha. Ab har tarah ka exception — extract_info ho ya cleanup —
+            # yahin pakड़ा jayega.
+            try:
+                with yt_dlp.YoutubeDL(opts) as ydl:
                     info = ydl.extract_info(url, download=True)
                     return ydl.prepare_filename(info)
-                except Exception as e:
-                    logger.error(f"yt-dlp Error: {e}")
-                    return None
+            except Exception as e:
+                logger.error(f"yt-dlp Error: {e}")
+                return None
 
         return await asyncio.to_thread(run)
 
@@ -366,4 +393,4 @@ class YouTube:
             return await self.saavn_download(title, video_id)
 
         return None
-      
+    
