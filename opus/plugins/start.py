@@ -182,6 +182,7 @@ async def start(_, message: types.Message):
     # 7. Video → photo → text fallback chain
     sent = None
     start_video = get_start_video()
+    print(f"[DEBUG] get_start_video() returned: {start_video!r}")
     if start_video:
         try:
             sent = await message.reply_video(
@@ -190,7 +191,9 @@ async def start(_, message: types.Message):
                 reply_markup=key,
                 quote=not private,
             )
-        except Exception:
+            print("[DEBUG] reply_video succeeded")
+        except Exception as e:
+            print(f"[DEBUG] reply_video FAILED: {type(e).__name__}: {e}")
             sent = None
 
     if sent is None:
