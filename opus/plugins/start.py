@@ -44,6 +44,13 @@ def get_start_img() -> str:
     return config.START_IMG
 
 
+def get_start_video() -> str | None:
+    """Return a random video URL from START_VIDEO list, or None if unset."""
+    if isinstance(config.START_VIDEO, list) and config.START_VIDEO:
+        return random.choice(config.START_VIDEO)
+    return config.START_VIDEO or None
+
+
 def _time_greeting() -> str:
     hour = datetime.now().hour
     if 5 <= hour < 12:
@@ -172,22 +179,35 @@ async def start(_, message: types.Message):
     # 6. Buttons
     key = buttons.start_key(message.lang, private)
 
-    # 7. Photo + caption + buttons (original position)
+    # 7. Video → photo → text fallback chain
     sent = None
-    try:
-        sent = await message.reply_photo(
-            photo=get_start_img(),
-            caption=_text,
-            reply_markup=key,
-            quote=not private,
-        )
-    except Exception:
-        sent = await message.reply_text(
-            text=_text,
-            reply_markup=key,
-            quote=not private,
-            parse_mode=enums.ParseMode.HTML,
-        )
+    start_video = get_start_video()
+    if start_video:
+        try:
+            sent = await message.reply_video(
+                video=start_video,
+                caption=_text,
+                reply_markup=key,
+                quote=not private,
+            )
+        except Exception:
+            sent = None
+
+    if sent is None:
+        try:
+            sent = await message.reply_photo(
+                photo=get_start_img(),
+                caption=_text,
+                reply_markup=key,
+                quote=not private,
+            )
+        except Exception:
+            sent = await message.reply_text(
+                text=_text,
+                reply_markup=key,
+                quote=not private,
+                parse_mode=enums.ParseMode.HTML,
+            )
 
     # 8. Save user / chat
     if private:
@@ -230,3 +250,4 @@ async def _new_member(_, message: types.Message):
                 return
             await utils.send_log(message, True)
             await db.add_chat(message.chat.id)
+            
