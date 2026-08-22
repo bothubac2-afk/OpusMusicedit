@@ -206,10 +206,19 @@ class YouTube:
                     timeout=aiohttp.ClientTimeout(total=30, connect=5),
                 ) as resp:
                     if resp.status != 200:
-                        logger.warning(f"[IGYT] Status: {resp.status}")
+                        body = (await resp.text())[:200]
+                        logger.warning(f"[IGYT] Status: {resp.status} | Body: {body}")
                         self._igyt_mark_fail()
                         return None
-                    data = await resp.json()
+                    try:
+                        data = await resp.json(content_type=None)
+                    except Exception as je:
+                        body = (await resp.text())[:200]
+                        logger.warning(
+                            f"[IGYT] JSON decode failed: {type(je).__name__}: {je} | Body: {body}"
+                        )
+                        self._igyt_mark_fail()
+                        return None
 
                 if not data.get("success"):
                     logger.warning(f"[IGYT] success=false: {data}")
@@ -246,8 +255,15 @@ class YouTube:
             logger.warning("[IGYT] Empty file!")
             self._igyt_mark_fail()
 
+        except asyncio.TimeoutError:
+            logger.warning("[IGYT] Error: request timed out")
+            self._igyt_mark_fail()
         except Exception as e:
-            logger.warning(f"[IGYT] Error: {e}")
+            # type(e).__name__ zaroori hai — kuch exceptions (jaise
+            # TimeoutError) ka str() khaali hota hai, isse pehle log mein
+            # sirf "[IGYT] Error: " print ho raha tha aur asli wajah pata
+            # nahi chal rahi thi.
+            logger.warning(f"[IGYT] Error: {type(e).__name__}: {e}")
             self._igyt_mark_fail()
 
         return None
