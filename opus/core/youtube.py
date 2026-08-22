@@ -14,27 +14,16 @@ from typing import Union
 from opus import logger
 from opus.helpers import Track, utils
 
-# ── Multi-API Config ──────────────────────────────────────────
-APIS = [
-    {
-        "url": "https://api.shrutibots.site",
-        "key": "ShrutiBotssWg4dn7KsrjaVwgjpq4j",
-        "param": "api_key",
-        "endpoint": "/download",
-    },
-    {
-        "url": "https://api01.shrutibots.site",
-        "key": "ShrutiBotsv5GJeaWIfzejJ8o0xnhw",
-        "param": "api_key",
-        "endpoint": "/download",
-    },
-    {
-        "url": "https://api01.shrutibots.site",
-        "key": "ShrutiBotsvoySy5NkjijEJCL9arWK",
-        "param": "api_key",
-        "endpoint": "/download",
-    },
-]
+# ── IG-YT Download API (primary) ────────────────────────────────
+# video_id se YouTube URL banake bhejte hain (?q=<youtube_url>), response
+# JSON mein "media[0].url" / "primaryUrl" ke andar actual downloadable file
+# link hota hai — usko phir stream/download karte hain. Koi API key nahi
+# chahiye.
+IGYT_API = {
+    "url": "https://ig-yt-download-api.vercel.app",
+    "video_endpoint": "/api/download",
+    "audio_endpoint": "/api/MP3/download",
+}
 
 # Saavn — sabse aakhri fallback. Song *naam* se search karta hai (video ID se
 # nahi), isliye sirf tab kaam karta hai jab humare paas title ho (search se
@@ -43,8 +32,8 @@ APIS = [
 # hai — proxy/cookie/Deno kuch nahi chahiye.
 SAAVN_API = "https://saavn-api-eight.vercel.app"
 
-FAIL_THRESHOLD = 3
-BLOCK_DURATION = 5 * 3600  # 5 hours
+IGYT_FAIL_THRESHOLD = 3
+IGYT_BLOCK_DURATION = 2 * 3600  # 2 hours — free vercel API, halka block rakha
 # ─────────────────────────────────────────────────────────────
 
 DOWNLOAD_DIR = "downloads"
@@ -63,15 +52,11 @@ class YouTube:
         self.cookies = []
         self.checked = False
         self.cookie_dir = "opus/cookies"
-        self._api_index = 0
 
-        # Circuit Breaker — har API ka unique identifier key se banao
-        self._fail_count = {self._api_id(api): 0 for api in APIS}
-        self._blocked_until = {self._api_id(api): 0 for api in APIS}
-
-    def _api_id(self, api: dict) -> str:
-        """Same URL par bhi alag key ho to unique ID banao"""
-        return f"{api['url']}::{api['key']}"
+        # IG-YT API ke liye circuit breaker (single API hai, key ki
+        # zaroorat nahi)
+        self._igyt_fail_count = 0
+        self._igyt_blocked_until = 0
 
     def get_cookies(self):
         """
@@ -101,39 +86,32 @@ class YouTube:
             self.checked = True
         return random.choice(self.cookies) if self.cookies else None
 
-    # ── Circuit Breaker ───────────────────────────────────────
+    # ── IG-YT API ke liye circuit breaker ──────────────────────
 
-    def _is_blocked(self, api: dict) -> bool:
-        aid = self._api_id(api)
+    def _igyt_is_blocked(self) -> bool:
         now = time.time()
-
-        if now < self._blocked_until[aid]:
-            remaining = int((self._blocked_until[aid] - now) / 3600)
-            logger.info(f"[{aid}] Blocked! ~{remaining}h remaining.")
+        if now < self._igyt_blocked_until:
+            remaining = int((self._igyt_blocked_until - now) / 60)
+            logger.info(f"[IGYT] Blocked! ~{remaining}min remaining.")
             return True
-
-        if self._fail_count[aid] >= FAIL_THRESHOLD:
-            logger.info(f"[{aid}] Block khatam, phir se try karega.")
-            self._fail_count[aid] = 0
-
+        if self._igyt_fail_count >= IGYT_FAIL_THRESHOLD:
+            logger.info("[IGYT] Block khatam, phir se try karega.")
+            self._igyt_fail_count = 0
         return False
 
-    def _mark_fail(self, api: dict):
-        aid = self._api_id(api)
-        self._fail_count[aid] += 1
+    def _igyt_mark_fail(self):
+        self._igyt_fail_count += 1
         logger.warning(
-            f"[{api['url']}] Fail count: {self._fail_count[aid]}/{FAIL_THRESHOLD}"
+            f"[IGYT] Fail count: {self._igyt_fail_count}/{IGYT_FAIL_THRESHOLD}"
         )
+        if self._igyt_fail_count >= IGYT_FAIL_THRESHOLD:
+            self._igyt_blocked_until = time.time() + IGYT_BLOCK_DURATION
+            logger.warning("[IGYT] Blocked for 2 hours!")
 
-        if self._fail_count[aid] >= FAIL_THRESHOLD:
-            self._blocked_until[aid] = time.time() + BLOCK_DURATION
-            logger.warning(f"[{api['url']}] Blocked for 5 hours!")
-
-    def _mark_success(self, api: dict):
-        aid = self._api_id(api)
-        self._fail_count[aid] = 0
-        self._blocked_until[aid] = 0
-        logger.info(f"[{api['url']}] Success! Fail count reset.")
+    def _igyt_mark_success(self):
+        self._igyt_fail_count = 0
+        self._igyt_blocked_until = 0
+        logger.info("[IGYT] Success! Fail count reset.")
 
     # ── Core Methods ──────────────────────────────────────────
 
@@ -203,71 +181,74 @@ class YouTube:
 
     # ── Download Methods ──────────────────────────────────────
 
-    async def _try_single_api(self, api: dict, video_id: str, video: bool):
+    async def igyt_download(self, video_id: str, video: bool = False):
+        """
+        Primary download source. ig-yt-download-api.vercel.app ko YouTube
+        URL bhejte hain, wo JSON mein ek "media[0].url" deta hai jahan se
+        actual file download hoti hai. Video aur audio dono ke liye alag
+        endpoint hai.
+        """
+        if self._igyt_is_blocked():
+            return None
+
+        youtube_url = self.base + video_id
+        endpoint = IGYT_API["video_endpoint"] if video else IGYT_API["audio_endpoint"]
+        ext = "mp4" if video else "mp3"
+        filename = f"{DOWNLOAD_DIR}/{video_id}.{ext}"
+        os.makedirs(DOWNLOAD_DIR, exist_ok=True)
+
         try:
-            youtube_url = self.base + video_id
-            ext = "mp4" if video else "mp3"
-            filename = f"{DOWNLOAD_DIR}/{video_id}.{ext}"
-            os.makedirs(DOWNLOAD_DIR, exist_ok=True)
-
-            params = {
-                "url": youtube_url,
-                "type": "video" if video else "audio",
-            }
-            if api["key"] and api["param"]:
-                params[api["param"]] = api["key"]
-
             async with aiohttp.ClientSession() as session:
+                # Step 1: metadata call — asli file URL isme milta hai
                 async with session.get(
-                    f"{api['url']}{api['endpoint']}",
-                    params=params,
-                    timeout=aiohttp.ClientTimeout(total=60, connect=5),
+                    f"{IGYT_API['url']}{endpoint}",
+                    params={"q": youtube_url},
+                    timeout=aiohttp.ClientTimeout(total=30, connect=5),
                 ) as resp:
-
                     if resp.status != 200:
-                        logger.warning(
-                            f"[{api['url']}] Status: {resp.status}"
-                        )
-                        self._mark_fail(api)
+                        logger.warning(f"[IGYT] Status: {resp.status}")
+                        self._igyt_mark_fail()
                         return None
+                    data = await resp.json()
 
+                if not data.get("success"):
+                    logger.warning(f"[IGYT] success=false: {data}")
+                    self._igyt_mark_fail()
+                    return None
+
+                media_list = data.get("media") or []
+                file_url = data.get("primaryUrl") or (
+                    media_list[0].get("url") if media_list else None
+                )
+                if not file_url:
+                    logger.warning("[IGYT] media URL missing in response.")
+                    self._igyt_mark_fail()
+                    return None
+
+                # Step 2: actual file stream/download
+                async with session.get(
+                    file_url,
+                    timeout=aiohttp.ClientTimeout(total=90, connect=5),
+                ) as resp:
+                    if resp.status != 200:
+                        logger.warning(f"[IGYT] File status: {resp.status}")
+                        self._igyt_mark_fail()
+                        return None
                     with open(filename, "wb") as f:
                         async for chunk in resp.content.iter_chunked(131072):
                             f.write(chunk)
 
             if os.path.exists(filename) and os.path.getsize(filename) > 0:
-                self._mark_success(api)
-                logger.info(f"[{api['url']}] Download success ✓")
+                self._igyt_mark_success()
+                logger.info("[IGYT] Download success ✓")
                 return filename
-            else:
-                logger.warning(f"[{api['url']}] Empty file!")
-                self._mark_fail(api)
+
+            logger.warning("[IGYT] Empty file!")
+            self._igyt_mark_fail()
 
         except Exception as e:
-            logger.warning(f"[{api['url']}] Error: {e}")
-            self._mark_fail(api)
-
-        return None
-
-    async def api_download(self, video_id: str, video: bool = False):
-        available = [api for api in APIS if not self._is_blocked(api)]
-
-        if not available:
-            logger.error("Saari APIs blocked! yt-dlp fallback.")
-            return None
-
-        start = self._api_index % len(available)
-        ordered = available[start:] + available[:start]
-        self._api_index += 1
-
-        for api in ordered:
-            logger.info(
-                f"Trying: {api['url']} key: {api['key'][:8]}... "
-                f"(fails: {self._fail_count[self._api_id(api)]}/{FAIL_THRESHOLD})"
-            )
-            result = await self._try_single_api(api, video_id, video)
-            if result:
-                return result
+            logger.warning(f"[IGYT] Error: {e}")
+            self._igyt_mark_fail()
 
         return None
 
@@ -310,9 +291,9 @@ class YouTube:
 
     async def saavn_download(self, title: str, video_id: str):
         """
-        Aakhri fallback — YouTube ke saare tareeke (APIs + yt-dlp) fail ho
-        jayein tab hi chalta hai. Song naam se JioSaavn pe search karta hai,
-        video download nahi karta (Saavn sirf audio deta hai).
+        Aakhri fallback — IG-YT API aur yt-dlp dono fail ho jayein tab hi
+        chalta hai. Song naam se JioSaavn pe search karta hai, video
+        download nahi karta (Saavn sirf audio deta hai).
         """
         if not title:
             logger.warning("[Saavn] Title nahi mila, skip.")
@@ -376,12 +357,12 @@ class YouTube:
         return None
 
     async def download(self, video_id: str, video: bool = False, title: str = None):
-        file = await self.api_download(video_id, video)
+        file = await self.igyt_download(video_id, video)
 
         if file:
             return file
 
-        logger.warning("All APIs failed/blocked, falling back to yt-dlp")
+        logger.warning("IG-YT API failed/blocked, falling back to yt-dlp")
         file = await self.ytdlp_download(video_id, video)
 
         if file:
@@ -393,4 +374,4 @@ class YouTube:
             return await self.saavn_download(title, video_id)
 
         return None
-    
+        
